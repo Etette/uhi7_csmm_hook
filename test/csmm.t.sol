@@ -28,13 +28,10 @@ contract CSMMTest is Test, Deployers {
     address trader2 = address(0x300);
 
     function setUp() public {
-        // Deploy manager and routers
-        deployFreshManagerAndRouters();
         
-        // Deploy test tokens and set up approvals
+        deployFreshManagerAndRouters();
         deployMintAndApprove2Currencies();
         
-        // Deploy hook with proper flags in address
         address hookAddress = address(
             uint160(
                 Hooks.BEFORE_ADD_LIQUIDITY_FLAG |
@@ -45,16 +42,16 @@ contract CSMMTest is Test, Deployers {
         deployCodeTo("CSMM.sol", abi.encode(manager), hookAddress);
         hook = CSMM(hookAddress);
 
-        // Initialize pool
+        
         (key, ) = initPool(
             currency0,
             currency1,
             hook,
-            3000, // fee - not used by our hook but required
-            TickMath.MAX_SQRT_PRICE - 1 // sqrtPrice - not used but required
+            3000, 
+            TickMath.MAX_SQRT_PRICE - 1 
         );
 
-        // Fund and approve for liquidity providers
+        // fund and approve for liquidity providers
         deal(Currency.unwrap(currency0), liquidityProvider, 100000 ether);
         deal(Currency.unwrap(currency1), liquidityProvider, 100000 ether);
         deal(Currency.unwrap(currency0), liquidityProvider2, 100000 ether);
@@ -70,7 +67,7 @@ contract CSMMTest is Test, Deployers {
         IERC20Minimal(Currency.unwrap(currency1)).approve(address(hook), type(uint256).max);
         vm.stopPrank();
 
-        // Set up traders
+        // traders setup
         deal(Currency.unwrap(currency0), trader1, 100000 ether);
         deal(Currency.unwrap(currency1), trader1, 100000 ether);
         deal(Currency.unwrap(currency0), trader2, 100000 ether);
@@ -87,9 +84,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 1: Basic liquidity addition
-    // ============================================
+  
     function test_AddLiquidity() public {
         vm.startPrank(liquidityProvider);
         
@@ -97,18 +92,17 @@ contract CSMMTest is Test, Deployers {
         uint256 initialBalance1 = currency1.balanceOf(liquidityProvider);
         uint256 liquidityAmount = 1000 ether;
 
-        // Add liquidity
+        // add liquidity
         hook.addLiquidity(key, liquidityAmount);
 
-        // Check token balances decreased
         assertEq(currency0.balanceOf(liquidityProvider), initialBalance0 - liquidityAmount);
         assertEq(currency1.balanceOf(liquidityProvider), initialBalance1 - liquidityAmount);
 
-        // Check receipt tokens minted
+        // is receipt tokens minted?
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), liquidityAmount);
         assertEq(hook.totalSupply(key.toId()), liquidityAmount);
 
-        // Check reserves updated
+        // is reserves updated?
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, liquidityAmount);
         assertEq(reserve1, liquidityAmount);
@@ -116,34 +110,26 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 2: Multiple liquidity providers
-    // ============================================
+
     function test_MultipleLiquidityProviders() public {
         uint256 liquidityAmount = 1000 ether;
 
-        // First LP adds liquidity
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, liquidityAmount);
 
-        // Second LP adds liquidity
         vm.prank(liquidityProvider2);
         hook.addLiquidity(key, liquidityAmount);
-
-        // Check total supply and individual balances
+        
         assertEq(hook.totalSupply(key.toId()), liquidityAmount * 2);
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), liquidityAmount);
         assertEq(hook.balanceOf(key.toId(), liquidityProvider2), liquidityAmount);
 
-        // Check reserves doubled
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, liquidityAmount * 2);
         assertEq(reserve1, liquidityAmount * 2);
     }
 
-    // ============================================
-    // Test 3: Remove liquidity (partial)
-    // ============================================
+    
     function test_RemoveLiquidity_Partial() public {
         vm.startPrank(liquidityProvider);
         
@@ -153,21 +139,19 @@ contract CSMMTest is Test, Deployers {
         uint256 initialBalance0 = currency0.balanceOf(liquidityProvider);
         uint256 initialBalance1 = currency1.balanceOf(liquidityProvider);
 
-        // Remove half of liquidity
+        // remove half liquidity
         uint256 sharesToRemove = liquidityAmount / 2;
         hook.removeLiquidity(key, sharesToRemove);
 
-        // Check receipt tokens burned
+        // is receipt tokens burned?
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), liquidityAmount - sharesToRemove);
         assertEq(hook.totalSupply(key.toId()), liquidityAmount - sharesToRemove);
 
-        // Check tokens returned (exactly half)
         uint256 finalBalance0 = currency0.balanceOf(liquidityProvider);
         uint256 finalBalance1 = currency1.balanceOf(liquidityProvider);
         assertEq(finalBalance0 - initialBalance0, liquidityAmount / 2);
         assertEq(finalBalance1 - initialBalance1, liquidityAmount / 2);
 
-        // Check reserves decreased
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, liquidityAmount / 2);
         assertEq(reserve1, liquidityAmount / 2);
@@ -175,9 +159,6 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 4: Remove all liquidity
-    // ============================================
     function test_RemoveLiquidity_All() public {
         vm.startPrank(liquidityProvider);
         
@@ -188,17 +169,16 @@ contract CSMMTest is Test, Deployers {
         hook.addLiquidity(key, liquidityAmount);
         hook.removeLiquidity(key, liquidityAmount);
 
-        // Check all receipt tokens burned
+       
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), 0);
         assertEq(hook.totalSupply(key.toId()), 0);
 
-        // Check all tokens returned
+       
         uint256 finalBalance0 = currency0.balanceOf(liquidityProvider);
         uint256 finalBalance1 = currency1.balanceOf(liquidityProvider);
         assertEq(finalBalance0, initialBalance0);
         assertEq(finalBalance1, initialBalance1);
 
-        // Check reserves emptied
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, 0);
         assertEq(reserve1, 0);
@@ -206,11 +186,8 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 5: Exact input swap - zeroForOne
-    // ============================================
     function test_Swap_ExactInput_ZeroForOne() public {
-        // Setup liquidity first
+       
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 10000 ether);
 
@@ -225,7 +202,6 @@ contract CSMMTest is Test, Deployers {
         uint256 balance0Before = currency0.balanceOf(trader1);
         uint256 balance1Before = currency1.balanceOf(trader1);
 
-        // Swap exact input: 100 token0 for token1
         swapRouter.swap(
             key,
             SwapParams({
@@ -237,13 +213,13 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Check balances changed by exactly swap amount (1:1 ratio)
+      
         uint256 balance0After = currency0.balanceOf(trader1);
         uint256 balance1After = currency1.balanceOf(trader1);
         assertEq(balance0Before - balance0After, swapAmount);
         assertEq(balance1After - balance1Before, swapAmount);
 
-        // Check reserves shifted correctly
+       
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, 10000 ether + swapAmount);
         assertEq(reserve1, 10000 ether - swapAmount);
@@ -251,9 +227,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 6: Exact output swap - zeroForOne
-    // ============================================
+   
     function test_Swap_ExactOutput_ZeroForOne() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 10000 ether);
@@ -288,9 +262,6 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 7: Exact input swap - oneForZero
-    // ============================================
     function test_Swap_ExactInput_OneForZero() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 10000 ether);
@@ -322,7 +293,7 @@ contract CSMMTest is Test, Deployers {
         assertEq(balance1Before - balance1After, swapAmount);
         assertEq(balance0After - balance0Before, swapAmount);
 
-        // Check reserves shifted correctly
+        // has reserves shifted correctly?
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, 10000 ether - swapAmount);
         assertEq(reserve1, 10000 ether + swapAmount);
@@ -330,9 +301,6 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 8: Exact output swap - oneForZero
-    // ============================================
     function test_Swap_ExactOutput_OneForZero() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 10000 ether);
@@ -367,20 +335,17 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 9: Transfer receipt tokens
-    // ============================================
     function test_TransferReceiptTokens() public {
         vm.startPrank(liquidityProvider);
         
         uint256 liquidityAmount = 1000 ether;
         hook.addLiquidity(key, liquidityAmount);
 
-        // Transfer half to another address
+        // transfer half to another address
         uint256 transferAmount = liquidityAmount / 2;
         hook.transfer(trader1, key.toId(), transferAmount);
 
-        // Check balances updated
+        // is bal updated?
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), liquidityAmount - transferAmount);
         assertEq(hook.balanceOf(key.toId(), trader1), transferAmount);
         assertEq(hook.totalSupply(key.toId()), liquidityAmount);
@@ -388,9 +353,6 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 10: Cannot remove more liquidity than owned
-    // ============================================
     function test_RevertWhen_RemoveMoreThanOwned() public {
         vm.startPrank(liquidityProvider);
         
@@ -403,9 +365,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 11: Cannot add liquidity through PoolManager
-    // ============================================
+  
     function test_RevertWhen_AddLiquidityThroughPoolManager() public {
         vm.expectRevert(CSMM.AddLiquidityThroughHook.selector);
         modifyLiquidityRouter.modifyLiquidity(
@@ -420,9 +380,7 @@ contract CSMMTest is Test, Deployers {
         );
     }
 
-    // ============================================
-    // Test 12: Multiple swaps maintain 1:1 ratio
-    // ============================================
+
     function test_MultipleSwapsMaintainRatio() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 10000 ether);
@@ -436,7 +394,7 @@ contract CSMMTest is Test, Deployers {
         uint256 initialBalance0 = currency0.balanceOf(trader1);
         uint256 initialBalance1 = currency1.balanceOf(trader1);
 
-        // First swap: 100 token0 → token1
+        // swap 100 token0 → token1
         swapRouter.swap(
             key,
             SwapParams({
@@ -448,7 +406,7 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Second swap: 50 token0 → token1
+        // swap 50 token0 → token1
         swapRouter.swap(
             key,
             SwapParams({
@@ -460,7 +418,7 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Third swap: 75 token1 → token0
+        //  swap 75 token1 → token0
         swapRouter.swap(
             key,
             SwapParams({
@@ -472,27 +430,23 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Net: spent 150 token0, got 150 token1 back, then spent 75 token1, got 75 token0 back
-        // Final: -75 token0, +75 token1
+        // total = -75 token0, +75 token1
         uint256 finalBalance0 = currency0.balanceOf(trader1);
         uint256 finalBalance1 = currency1.balanceOf(trader1);
-
+        // assert deltas
         assertEq(initialBalance0 - finalBalance0, 75 ether);
         assertEq(finalBalance1 - initialBalance1, 75 ether);
 
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 13: Withdrawal amounts calculation
-    // ============================================
+
     function test_GetWithdrawalAmounts() public {
         vm.startPrank(liquidityProvider);
         
         uint256 liquidityAmount = 1000 ether;
         hook.addLiquidity(key, liquidityAmount);
 
-        // Test getting withdrawal amounts for half shares
         (uint256 amount0, uint256 amount1) = hook.getWithdrawalAmounts(key, liquidityAmount / 2);
         
         assertEq(amount0, liquidityAmount / 2);
@@ -501,9 +455,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 14: Get liquidity share
-    // ============================================
+    
     function test_GetLiquidityShare() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 1000 ether);
@@ -515,16 +467,13 @@ contract CSMMTest is Test, Deployers {
         assertEq(shareTrader, 0);
     }
 
-    // ============================================
-    // Test 15: Claim token balances verification
-    // ============================================
+   
     function test_ClaimTokenBalances() public {
         vm.startPrank(liquidityProvider);
         
         uint256 liquidityAmount = 1000 ether;
         hook.addLiquidity(key, liquidityAmount);
 
-        // Hook should have claim tokens for the deposited liquidity
         uint256 token0ClaimID = uint256(uint160(Currency.unwrap(currency0)));
         uint256 token1ClaimID = uint256(uint160(Currency.unwrap(currency1)));
 
@@ -537,9 +486,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 16: FULL WORKFLOW - Complex scenario
-    // ============================================
+
     function test_FullWorkflow_ComplexScenario() public {
         console.log("=== FULL WORKFLOW TEST ===");
         
@@ -596,7 +543,7 @@ contract CSMMTest is Test, Deployers {
         assertEq(reserve1, 7800 ether);
         vm.stopPrank();
 
-        // ===== STEP 4: Trader 2 Swaps Opposite Direction =====
+        // ===== STEP 4: Trader 2 Swaps in opposite Direction =====
         console.log("\n--- Step 4: Trader 2 Swaps 150 token1 for token0 ---");
         vm.startPrank(trader2);
         uint256 trader2Balance0Before = currency0.balanceOf(trader2);
@@ -629,13 +576,13 @@ contract CSMMTest is Test, Deployers {
         uint256 lp1Balance0Before = currency0.balanceOf(liquidityProvider);
         uint256 lp1Balance1Before = currency1.balanceOf(liquidityProvider);
         
-        // Calculate expected withdrawal (proportional to current reserves)
+        // expected withdrawal must be proportional to current reserves
         (uint256 expectedAmount0, uint256 expectedAmount1) = hook.getWithdrawalAmounts(key, sharesToRemove);
         console.log("Expected withdrawal:", expectedAmount0 / 1e18, expectedAmount1 / 1e18);
         
         hook.removeLiquidity(key, sharesToRemove);
         
-        // Check LP1 got proportional share based on current reserves
+        // check LP1 got proportional share based on current reserves
         uint256 lp1ReceivedToken0 = currency0.balanceOf(liquidityProvider) - lp1Balance0Before;
         uint256 lp1ReceivedToken1 = currency1.balanceOf(liquidityProvider) - lp1Balance1Before;
         
