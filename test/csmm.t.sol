@@ -648,23 +648,20 @@ contract CSMMTest is Test, Deployers {
         console.log("\n=== WORKFLOW COMPLETED SUCCESSFULLY ===");
     }
 
-    // ============================================
-    // Test 17: Liquidity removal after swaps affects ratios
-    // ============================================
+    
     function test_LiquidityRemovalAfterSwaps() public {
-        // Add liquidity from two LPs
+      
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 1000 ether);
         
         vm.prank(liquidityProvider2);
         hook.addLiquidity(key, 1000 ether);
 
-        // Check initial state
+        
         (uint256 reserve0Before, uint256 reserve1Before) = hook.getReserves(key);
         assertEq(reserve0Before, 2000 ether);
         assertEq(reserve1Before, 2000 ether);
 
-        // Perform swap that shifts reserves
         PoolSwapTest.TestSettings memory settings = PoolSwapTest.TestSettings({
             takeClaims: false,
             settleUsingBurn: false
@@ -682,12 +679,10 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // Check reserves shifted
         (uint256 reserve0After, uint256 reserve1After) = hook.getReserves(key);
         assertEq(reserve0After, 2500 ether);
         assertEq(reserve1After, 1500 ether);
 
-        // LP1 removes their share (50% of total)
         vm.startPrank(liquidityProvider);
         uint256 lp1Shares = hook.balanceOf(key.toId(), liquidityProvider);
         uint256 lp1Balance0Before = currency0.balanceOf(liquidityProvider);
@@ -695,23 +690,18 @@ contract CSMMTest is Test, Deployers {
         
         hook.removeLiquidity(key, lp1Shares);
         
-        // LP1 should get 50% of current reserves (not original 1:1 ratio)
         uint256 received0 = currency0.balanceOf(liquidityProvider) - lp1Balance0Before;
         uint256 received1 = currency1.balanceOf(liquidityProvider) - lp1Balance1Before;
         
         assertEq(received0, 1250 ether); // 50% of 2500
         assertEq(received1, 750 ether);  // 50% of 1500
-        
-        // Note: LP1 deposited 1000 of each but got back 1250/750
-        // This is fair because they own 50% of the pool at current state
+      
         console.log("LP1 deposited 1000/1000, received:", received0 / 1e18, received1 / 1e18);
         
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 18: Cannot remove liquidity with zero shares
-    // ============================================
+ 
     function test_RevertWhen_RemoveLiquidityWithZeroShares() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 1000 ether);
@@ -722,9 +712,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 19: Multiple LPs with different shares
-    // ============================================
+ 
     function test_MultipleLPsWithDifferentShares() public {
         // LP1 adds 1000
         vm.prank(liquidityProvider);
@@ -785,9 +773,6 @@ contract CSMMTest is Test, Deployers {
         assertEq(hook.balanceOf(key.toId(), liquidityProvider2), 3000 ether);
     }
 
-    // ============================================
-    // Test 20: Reserve tracking accuracy
-    // ============================================
     function test_ReserveTrackingAccuracy() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 5000 ether);
@@ -848,9 +833,6 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 21: Edge case - Remove liquidity immediately after adding
-    // ============================================
     function test_RemoveLiquidityImmediately() public {
         vm.startPrank(liquidityProvider);
         
@@ -861,7 +843,7 @@ contract CSMMTest is Test, Deployers {
         hook.addLiquidity(key, amount);
         hook.removeLiquidity(key, amount);
 
-        // Should get back exactly what was put in (no swaps occurred)
+        // Should get back exactly what was put in bc no swaps occurred
         assertEq(currency0.balanceOf(liquidityProvider), balance0Before);
         assertEq(currency1.balanceOf(liquidityProvider), balance1Before);
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), 0);
@@ -870,9 +852,7 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 22: Transfer receipt tokens and then remove
-    // ============================================
+   
     function test_TransferThenRemoveLiquidity() public {
         // LP1 adds liquidity
         vm.prank(liquidityProvider);
@@ -900,9 +880,6 @@ contract CSMMTest is Test, Deployers {
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), 500 ether);
     }
 
-    // ============================================
-    // Test 23: Large swap stress test
-    // ============================================
     function test_LargeSwapStressTest() public {
         // Add substantial liquidity
         vm.prank(liquidityProvider);
@@ -953,19 +930,16 @@ contract CSMMTest is Test, Deployers {
         vm.stopPrank();
     }
 
-    // ============================================
-    // Test 24: Withdrawal calculations before and after swaps
-    // ============================================
     function test_WithdrawalCalculationsWithSwaps() public {
         vm.prank(liquidityProvider);
         hook.addLiquidity(key, 2000 ether);
 
-        // Before any swaps - should be 1:1
+        
         (uint256 amount0Before, uint256 amount1Before) = hook.getWithdrawalAmounts(key, 1000 ether);
         assertEq(amount0Before, 1000 ether);
         assertEq(amount1Before, 1000 ether);
 
-        // Perform swap
+   
         PoolSwapTest.TestSettings memory settings = PoolSwapTest.TestSettings({
             takeClaims: false,
             settleUsingBurn: false
@@ -983,25 +957,21 @@ contract CSMMTest is Test, Deployers {
             ZERO_BYTES
         );
 
-        // After swap - should reflect new ratios
+        
         (uint256 amount0After, uint256 amount1After) = hook.getWithdrawalAmounts(key, 1000 ether);
         assertEq(amount0After, 1300 ether); // 50% of 2600
         assertEq(amount1After, 700 ether);  // 50% of 1400
         
-        // Total value should be roughly the same (2000 total)
         assertEq(amount0After + amount1After, 2000 ether);
     }
 
-    // ============================================
-    // Test 25: Zero liquidity edge case
-    // ============================================
+   
     function test_GetWithdrawalAmounts_ZeroLiquidity() public {
-        // Query withdrawal amounts when no liquidity exists
+        
         (uint256 amount0, uint256 amount1) = hook.getWithdrawalAmounts(key, 100 ether);
         assertEq(amount0, 0);
         assertEq(amount1, 0);
 
-        // Query reserves when no liquidity exists
         (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
         assertEq(reserve0, 0);
         assertEq(reserve1, 0);
