@@ -91,14 +91,20 @@ contract CSMMTest is Test, Deployers {
         uint256 initialBalance0 = currency0.balanceOf(liquidityProvider);
         uint256 initialBalance1 = currency1.balanceOf(liquidityProvider);
         uint256 liquidityAmount = 1000 ether;
+        console.log("Initial Balance Token0 lp0:", initialBalance0);
+        console.log("Initial Balance Token1 lp0:", initialBalance1);
 
         // add liquidity
         hook.addLiquidity(key, liquidityAmount);
+        console.log("Added Liquidity Amount:", liquidityAmount);
 
         assertEq(currency0.balanceOf(liquidityProvider), initialBalance0 - liquidityAmount);
         assertEq(currency1.balanceOf(liquidityProvider), initialBalance1 - liquidityAmount);
 
         // is receipt tokens minted?
+        console.log("LP Receipt Token Balance:", hook.balanceOf(key.toId(), liquidityProvider));
+        console.log("Total Supply of Receipt Tokens:", hook.totalSupply(key.toId()));
+        console.log("Hook 6909 balance:", currency0.balanceOf(address(hook)), currency1.balanceOf(address(hook)));
         assertEq(hook.balanceOf(key.toId(), liquidityProvider), liquidityAmount);
         assertEq(hook.totalSupply(key.toId()), liquidityAmount);
 
@@ -107,6 +113,44 @@ contract CSMMTest is Test, Deployers {
         assertEq(reserve0, liquidityAmount);
         assertEq(reserve1, liquidityAmount);
 
+        vm.stopPrank();
+    }
+
+      function test_claimBalances() public  {
+        // We add 1000 * (10^18) of liquidity of each token to the CSMM pool
+        // The actual tokens will move into the PM
+        // But the hook should get equivalent amount of claim tokens for each token
+        vm.startPrank(liquidityProvider);
+        uint256 initialBalance0 = currency0.balanceOf(liquidityProvider);
+        uint256 initialBalance1 = currency1.balanceOf(liquidityProvider);
+        uint256 liquidityAmount = 1000 ether;
+        console.log("Initial Balance Token0 lp0:", initialBalance0);
+        console.log("Initial Balance Token1 lp0:", initialBalance1);
+
+        // add liquidity
+        hook.addLiquidity(key, liquidityAmount);
+        console.log("Added Liquidity Amount:", liquidityAmount);
+
+        uint token0ClaimID = CurrencyLibrary.toId(currency0);
+        uint token1ClaimID = CurrencyLibrary.toId(currency1);
+        console.log("Token0 Claim ID:", token0ClaimID);
+        console.log("Token1 Claim ID:", token1ClaimID);
+
+        uint token0ClaimsBalance = manager.balanceOf(
+            address(hook),
+            token0ClaimID
+        );
+        uint token1ClaimsBalance = manager.balanceOf(
+            address(hook),
+            token1ClaimID
+        );
+        console.log("Hook Token0 Claims Balance:", token0ClaimsBalance);
+        console.log("Hook Token1 Claims Balance:", token1ClaimsBalance);
+        console.log("PM token0 bal:", key.currency0.balanceOf(address(manager)));
+        console.log("PM token1 bal:", key.currency1.balanceOf(address(manager)));
+
+        assertEq(token0ClaimsBalance, 1000e18);
+        assertEq(token1ClaimsBalance, 1000e18);
         vm.stopPrank();
     }
 
@@ -198,9 +242,14 @@ contract CSMMTest is Test, Deployers {
 
         vm.startPrank(trader1);
         
+        (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
+        console.log("Reserves before swap - Reserve0:", reserve0, "Reserve1:", reserve1);
+
         uint256 swapAmount = 100 ether;
         uint256 balance0Before = currency0.balanceOf(trader1);
         uint256 balance1Before = currency1.balanceOf(trader1);
+        console.log("Trader1 Balance0 Before:", balance0Before);
+        console.log("Trader1 Balance1 Before:", balance1Before);
 
         swapRouter.swap(
             key,
@@ -216,11 +265,15 @@ contract CSMMTest is Test, Deployers {
       
         uint256 balance0After = currency0.balanceOf(trader1);
         uint256 balance1After = currency1.balanceOf(trader1);
+        console.log("Trader1 Balance0 After:", balance0After);
+        console.log("Trader1 Balance1 After:", balance1After);
+
         assertEq(balance0Before - balance0After, swapAmount);
         assertEq(balance1After - balance1Before, swapAmount);
 
        
-        (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
+        // (uint256 reserve0, uint256 reserve1) = hook.getReserves(key);
+        console.log("Reserves after swap - Reserve0:", reserve0, "Reserve1:", reserve1);
         assertEq(reserve0, 10000 ether + swapAmount);
         assertEq(reserve1, 10000 ether - swapAmount);
 
